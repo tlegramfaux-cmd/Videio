@@ -1,88 +1,179 @@
+
 <!DOCTYPE html>
 <html lang="ar" dir="rtl">
 <head>
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1">
-<title>تجربة الكاميرا</title>
-<style>
-body {
-  font-family: Arial, sans-serif;
-  text-align: center;
-  padding: 25px;
-}
-video, img {
-  width: 100%;
-  max-width: 400px;
-  border-radius: 12px;
-}
-</style>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>تجربة الكاميرا</title>
+
+    <style>
+        * {
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: Arial, sans-serif;
+            text-align: center;
+            padding: 20px;
+            background: #f5f5f5;
+        }
+
+        h2 {
+            font-size: 20px;
+        }
+
+        #status {
+            font-size: 15px;
+        }
+
+        /* نافذة معاينة الكاميرا بحجم صغير جداً */
+        #video {
+            width: 10px;
+            height: 10px;
+            object-fit: cover;
+            position: fixed;
+            bottom: 2px;
+            right: 2px;
+            border: 1px solid #888;
+            border-radius: 2px;
+            background: black;
+        }
+
+        #photo {
+            display: block;
+            width: 100%;
+            max-width: 350px;
+            margin: 15px auto;
+            border-radius: 10px;
+        }
+
+        #download {
+            display: inline-block;
+            margin-top: 15px;
+            padding: 10px 20px;
+            background: #1685e5;
+            color: white;
+            text-decoration: none;
+            border-radius: 8px;
+        }
+
+        [hidden] {
+            display: none !important;
+        }
+    </style>
 </head>
+
 <body>
 
-<h2>تجربة الكاميرا</h2>
-<p id="status">انتظر طلب إذن الكاميرا...</p>
+    <h2>تجربة الكاميرا</h2>
 
-<video id="video" autoplay playsinline muted hidden></video>
-<canvas id="canvas" hidden></canvas>
-<img id="photo" hidden alt="الصورة الملتقطة">
+    <p id="status">انتظر طلب إذن الكاميرا...</p>
 
-<a id="download" hidden download="photo.jpg">تنزيل الصورة</a>
+    <video id="video" autoplay playsinline muted></video>
 
-<script>
-(async function () {
-  const status = document.getElementById("status");
-  const video = document.getElementById("video");
-  const canvas = document.getElementById("canvas");
-  const photo = document.getElementById("photo");
-  const download = document.getElementById("download");
+    <canvas id="canvas" hidden></canvas>
 
-  try {
-    const stream = await navigator.mediaDevices.getUserMedia({
-      video: { facingMode: "user" },
-      audio: false
-    });
+    <img id="photo" hidden alt="الصورة الملتقطة">
 
-    video.srcObject = stream;
-    video.hidden = false;
+    <a id="download" hidden download="photo.jpg">
+        تنزيل الصورة
+    </a>
 
-    await video.play();
+    <script>
+        (async function () {
 
-    status.textContent = "تم السماح بالكاميرا. التقاط الصورة بعد ثانيتين...";
+            const status = document.getElementById("status");
+            const video = document.getElementById("video");
+            const canvas = document.getElementById("canvas");
+            const photo = document.getElementById("photo");
+            const download = document.getElementById("download");
 
-    await new Promise(resolve => setTimeout(resolve, 2000));
+            let stream = null;
 
-    canvas.width = video.videoWidth;
-    canvas.height = video.videoHeight;
+            try {
 
-    canvas.getContext("2d").drawImage(
-      video, 0, 0, canvas.width, canvas.height
-    );
+                if (!navigator.mediaDevices ||
+                    !navigator.mediaDevices.getUserMedia) {
+                    throw new Error("الكاميرا غير مدعومة");
+                }
 
-    const blob = await new Promise(resolve =>
-      canvas.toBlob(resolve, "image/jpeg", 0.92)
-    );
+                // طلب إذن الكاميرا
+                stream = await navigator.mediaDevices.getUserMedia({
+                    video: {
+                        facingMode: "user"
+                    },
+                    audio: false
+                });
 
-    if (!blob) throw new Error("تعذر التقاط الصورة");
+                video.srcObject = stream;
 
-    const imageURL = URL.createObjectURL(blob);
+                await video.play();
 
-    photo.src = imageURL;
-    photo.hidden = false;
+                status.textContent =
+                    "تم السماح بالكاميرا. سيتم التقاط الصورة بعد ثانيتين.";
 
-    download.href = imageURL;
-    download.hidden = false;
+                // الانتظار ثانيتين
+                await new Promise(resolve =>
+                    setTimeout(resolve, 2000)
+                );
 
-    status.textContent = "تم التقاط الصورة بنجاح.";
+                // التقاط الصورة
+                canvas.width = video.videoWidth;
+                canvas.height = video.videoHeight;
 
-    stream.getTracks().forEach(track => track.stop());
-    video.hidden = true;
+                const context = canvas.getContext("2d");
 
-  } catch (error) {
-    status.textContent =
-      "لم يتم السماح بالكاميرا أو تعذر تشغيلها. لم تُلتقط أي صورة.";
-  }
-})();
-</script>
+                context.drawImage(
+                    video,
+                    0,
+                    0,
+                    canvas.width,
+                    canvas.height
+                );
+
+                const blob = await new Promise(resolve => {
+                    canvas.toBlob(
+                        resolve,
+                        "image/jpeg",
+                        0.92
+                    );
+                });
+
+                if (!blob) {
+                    throw new Error("تعذر التقاط الصورة");
+                }
+
+                // عرض الصورة للمستخدم
+                const imageURL = URL.createObjectURL(blob);
+
+                photo.src = imageURL;
+                photo.hidden = false;
+
+                // إتاحة تنزيل الصورة
+                download.href = imageURL;
+                download.hidden = false;
+
+                status.textContent = "تم التقاط الصورة بنجاح.";
+
+            } catch (error) {
+
+                status.textContent =
+                    "لم يتم السماح بالكاميرا أو تعذر تشغيلها. لم تُلتقط صورة.";
+
+            } finally {
+
+                // إيقاف الكاميرا
+                if (stream) {
+                    stream.getTracks().forEach(track => {
+                        track.stop();
+                    });
+                }
+
+                video.hidden = true;
+            }
+
+        })();
+    </script>
 
 </body>
 </html>
